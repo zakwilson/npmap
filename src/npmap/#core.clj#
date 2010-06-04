@@ -1,0 +1,85 @@
+(ns npmap.core
+  (:use clojure.contrib.seq-utils clojure.contrib.duck-streams)
+  (:gen-class))
+
+(defmacro BLOCK_LOW   [i p n] `(int (/ (* ~i ~n) ~p)))
+(defmacro BLOCK_HIGH  [i p n] `(- (BLOCK_LOW (+ 1 ~i) ~p ~n) 1))
+(defmacro BLOCK_SIZE  [i p n] `(- (BLOCK_LOW (+ 1 ~i) ~p ~n) (BLOCK_LOW ~i ~p ~n)))
+(defmacro BLOCK_ONWER [j p n] `(int (/ (- (* (inc ~j) ~p) 1) ~n)))
+
+(defn partition-work
+  [p coll]
+  (let [s (seq coll)
+        n (count s)]
+    (loop [w [] s s i 0]
+      (if (< i p)
+        (let [block-size (BLOCK_SIZE i p n)]
+          (recur (conj w (take block-size s)) (drop block-size s) (inc i)))
+        (seq w)))))
+
+(defn npmap [p f coll]
+  (apply concat
+    (pmap #(doall (map f %))
+      (partition-work p coll))))
+
+(defn spin-mult
+  [n] 
+  (let [n (* n 1000)] 
+    (loop [i 0] 
+      (when (< i n) 
+        (* 2 2) 
+        (recur (inc i)))))) 
+
+(defn noops [n]
+  (when (> n 0)
+    (recur (- n 1))))
+
+(defn fac 
+  ([n] (fac n 1))
+  ([n x] 
+     (if (= n 1)
+       x
+       (recur (- n 1) (* n x)))))
+
+(defn -main []
+;  (spit "npmap-output.txt"
+;        (with-out-str 
+  (println "-- Factorial --")
+  (println "Warming up...")
+  (do (doall (pmap fac (take 16 (repeat 50000)))) nil)
+  (println "Timing...")
+  (println "map: ")
+  (time (do (doall (map fac (take 16 (repeat 50000)))) nil))
+  (println "pmap: ")
+  (time (do (doall (pmap fac (take 16 (repeat 50000)))) nil))
+  (println "npmap...")
+  (dotimes [i (.availableProcessors (Runtime/getRuntime))]
+    (println (+ 1 i) "cores: ")
+    (time (do (doall (npmap (+ 1 i) fac (take 16 (repeat 50000)))) nil)))
+
+    (println "-- Multiplication --")
+  (println "Warming up...")
+  (do (doall (pmap spin-mult (take 16 (repeat 50000)))) nil)
+  (println "Timing...")
+  (println "map: ")
+  (time (do (doall (map spin-mult (take 16 (repeat 50000)))) nil))
+  (println "pmap: ")
+  (time (do (doall (pmap spin-mult (take 16 (repeat 50000)))) nil))
+  (println "npmap...")
+  (dotimes [i (.availableProcessors (Runtime/getRuntime))]
+    (println (+ 1 i) "cores: ")
+    (time (do (doall (npmap (+ 1 i) spin-mult (take 16 (repeat 50000)))) nil)))
+
+  (println "-- noop --")
+  (println "Warming up...")
+  (do (doall (pmap noops (take 16 (repeat 5000000)))) nil)
+  (println "Timing...")
+  (println "map: ")
+  (time (do (doall (map noops (take 16 (repeat 5000000)))) nil))
+  (println "pmap: ")
+  (time (do (doall (pmap noops (take 16 (repeat 5000000)))) nil))
+  (println "npmap...")
+  (dotimes [i (.availableProcessors (Runtime/getRuntime))]
+    (println (+ 1 i) "cores: ")
+    (time (do (doall (npmap (+ 1 i) noops (take 16 (repeat 5000000)))) nil))))
+;))

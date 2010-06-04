@@ -1,0 +1,7 @@
+## npmap
+
+Parallel map benchmarks for Clojure. This is mostly intended to help track down why it doesn't go much faster on an early Mac Pro with 2x Xeon 5150 with four cores rather than two.
+
+## License
+
+EPL
