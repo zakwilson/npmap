@@ -1,5 +1,7 @@
 (ns npmap.core
-  (:use clojure.contrib.seq-utils clojure.contrib.duck-streams)
+  (require [zutil.util :as z]
+           [clojure.core.reducers :as r]
+           [useful.parallel :as u])
   (:gen-class))
 
 (defmacro BLOCK_LOW   [i p n] `(int (/ (* ~i ~n) ~p)))
@@ -31,38 +33,62 @@
         (recur (inc i)))))) 
 
 (defn fac 
-  ([n] (fac n 1))
+  ([n] (fac n 1N))
   ([n x] 
      (if (= n 1)
        x
        (recur (- n 1) (* n x)))))
 
-(defn -main []
-;  (spit "npmap-output.txt"
-;        (with-out-str 
-  (println "-- Factorial --")
-  (println "Warming up...")
-  (do (doall (pmap fac (take 16 (repeat 50000)))) nil)
-  (println "Timing...")
-  (println "map: ")
-  (time (do (doall (map fac (take 16 (repeat 50000)))) nil))
-  (println "pmap: ")
-  (time (do (doall (pmap fac (take 16 (repeat 50000)))) nil))
-  (println "npmap...")
-  (dotimes [i (.availableProcessors (Runtime/getRuntime))]
-    (println (+ 1 i) "cores: ")
-    (time (do (doall (npmap (+ 1 i) fac (take 16 (repeat 50000)))) nil)))
+(def tests
+     {"16/50000" (take 16 (repeat 50000))
+      "1000/500" (take 1000 (repeat 500))
+      "10000/50" (take 10000 (repeat 50))})
 
-    (println "-- Multiplication --")
-  (println "Warming up...")
-  (do (doall (pmap spin-mult (take 16 (repeat 50000)))) nil)
-  (println "Timing...")
-  (println "map: ")
-  (time (do (doall (map spin-mult (take 16 (repeat 50000)))) nil))
-  (println "pmap: ")
-  (time (do (doall (pmap spin-mult (take 16 (repeat 50000)))) nil))
-  (println "npmap...")
-  (dotimes [i (.availableProcessors (Runtime/getRuntime))]
-    (println (+ 1 i) "cores: ")
-    (time (do (doall (npmap (+ 1 i) spin-mult (take 16 (repeat 50000)))) nil))))
-;))
+(defn -main []
+  (doseq [the-test tests]
+    (let [test-name (key the-test)
+          test-data (val the-test)]
+      (println test-name)
+      (println "-- Factorial --")
+      (println "Warming up...")
+      (do (doall (pmap fac test-data)) nil)
+      (println "Timing...")
+      (println "map: ")
+      (time (do (doall (map fac test-data)) nil))
+      (println "pmap: ")
+      (time (do (doall (pmap fac test-data)) nil))
+      (println "npmap...")
+      (dotimes [i (.availableProcessors (Runtime/getRuntime))]
+        (println (+ 1 i) "cores: ")
+        (time (do (doall (npmap (+ 1 i) fac test-data)) nil)))
+      (println "zpmap...")
+      (time (do (doall (z/zpmap fac test-data))
+                nil))
+      (println "pcollect...")
+      (time (do (doall (u/pcollect fac test-data))
+                nil))
+      (println "reducers...")
+      (time (do (into [] (r/map fac test-data))
+                nil))
+
+      (println "-- Multiplication --")
+      (println "Warming up...")
+      (do (doall (pmap spin-mult test-data)) nil)
+      (println "Timing...")
+      (println "map: ")
+      (time (do (doall (map spin-mult test-data)) nil))
+      (println "pmap: ")
+      (time (do (doall (pmap spin-mult test-data)) nil))
+      (println "npmap...")
+      (dotimes [i (.availableProcessors (Runtime/getRuntime))]
+        (println (+ 1 i) "cores: ")
+        (time (do (doall (npmap (+ 1 i) spin-mult test-data)) nil)))
+      (println "zpmap...")
+      (time (do (doall (z/zpmap spin-mult test-data))
+                nil))
+      (println "pcollect...")
+      (time (do (doall (u/pcollect spin-mult test-data))
+                nil))
+      (println "reducers...")
+      (time (do (into [] (r/map spin-mult test-data))
+                nil)))))
